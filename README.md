@@ -2,11 +2,9 @@
 ### Sistema de pedidos full-stack — TP3 Programación III
 
 > Aplicación web para bar/restaurante con soporte de **pedidos en mesa** y **delivery**, panel de administración completo y autenticación con JWT.
-
-![Node.js]
-![Express]
-![PostgreSQL]
-
+![Node.js](https://img.shields.io/badge/Node.js-v18+-339933?style=flat&logo=node.js&logoColor=white)
+![Express](https://img.shields.io/badge/Express-4.x-000000?style=flat&logo=express&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-14+-4169E1?style=flat&logo=postgresql&logoColor=white)
 ---
 
 ## Descripción
@@ -15,18 +13,18 @@
 
 ---
 
-## Stack tecnológico
+## Tecnologia del proyecto
 
-| Tecnología         | Versión |               Uso                 |
-|                    |         |                                   |
-| Node.js            | v18+    | Entorno de ejecución del servidor |
-| Express            | 4.x     | Framework para rutas HTTP         |
-| PostgreSQL         | 14+     | Base de datos relacional          |
-| pg (node-postgres) | 8.x     | Conexión Node ↔ PostgreSQL        |
-| jsonwebtoken       | 9.x     | Autenticación con JWT             |
-| bcryptjs           | 2.x     | Hash seguro de contraseñas        |
-| HTML + CSS + JS    | —       | Frontend vanilla sin frameworks   |
-| dotenv             | 16.x    | Variables de entorno              |
+| Tecnología | Versión | Uso |
+|---|---|---|
+| Node.js | v18+ | Entorno de ejecución del servidor |
+| Express | 4.x | Framework para rutas HTTP |
+| PostgreSQL | 14+ | Base de datos relacional |
+| pg (node-postgres) | 8.x | Conexión Node ↔ PostgreSQL |
+| jsonwebtoken | 9.x | Autenticación con JWT |
+| bcryptjs | 2.x | Hash seguro de contraseñas |
+| HTML + CSS + JS | — | Frontend vanilla sin frameworks |
+| dotenv | 16.x | Variables de entorno |
 
 ---
 
