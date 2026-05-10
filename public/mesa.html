@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>El Patio – Mesa</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .mis-pedidos-mesa { max-width: 1300px; margin: 0 auto; padding: 0 1.5rem 2rem; display: none; }
+        .mis-pedidos-mesa.visible { display: block; }
+        .pedido-mesa-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.25rem; margin-bottom: 0.75rem; }
+        .pedido-mesa-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; }
+        .pedido-mesa-id { font-weight: 700; font-size: 0.95rem; }
+        .pedido-mesa-total { color: var(--accent); font-weight: 800; font-size: 1rem; }
+        .estado-steps { display: flex; gap: 0; margin-top: 0.75rem; }
+        .estado-step { flex: 1; text-align: center; font-size: 0.72rem; color: var(--text-muted); position: relative; padding-top: 28px; }
+        .estado-step::before { content: ''; width: 14px; height: 14px; border-radius: 50%; background: var(--border); position: absolute; top: 0; left: 50%; transform: translateX(-50%); border: 2px solid var(--border); }
+        .estado-step::after { content: ''; position: absolute; top: 6px; left: calc(50% + 7px); width: calc(100% - 14px); height: 2px; background: var(--border); }
+        .estado-step:last-child::after { display: none; }
+        .estado-step.activo::before { background: var(--accent); border-color: var(--accent); box-shadow: 0 0 8px var(--accent); }
+        .estado-step.activo { color: var(--accent); font-weight: 700; }
+        .estado-step.completado::before { background: var(--success); border-color: var(--success); }
+        .estado-step.completado::after { background: var(--success); }
+        .estado-step.completado { color: var(--success); }
+        .detalle-items { margin-top: 0.75rem; border-top: 1px solid var(--border); padding-top: 0.75rem; }
+        .detalle-item { display: flex; justify-content: space-between; font-size: 0.82rem; color: var(--text-secondary); padding: 0.2rem 0; }
+    </style>
+</head>
+<body>
+
+    <nav class="navbar">
+        <a class="navbar-brand" href="#"><img src="logo.png" alt="El Patio"><span>El Patio Comidas</span></a>
+        <div class="navbar-actions">
+            <span class="navbar-user" id="saludo"></span>
+        </div>
+    </nav>
+
+    <div class="categorias-bar" id="categorias-bar">
+        <button class="categoria-btn active" onclick="filtrarCategoria(null, this)">🍽️ Todos</button>
+    </div>
+
+    <div class="main-layout">
+        <div>
+            <p class="section-title" id="titulo-seccion">Todo el menú</p>
+            <div class="productos-grid" id="productos-grid">
+                <div class="loading"><div class="spinner"></div>Cargando menú...</div>
+            </div>
+        </div>
+
+        <div class="carrito-panel">
+            <div class="carrito-titulo">
+                🛒 Tu pedido
+                <span class="carrito-badge" id="carrito-count">0</span>
+            </div>
+
+            <div style="background:var(--accent-light);border:1px solid var(--accent);border-radius:var(--radius-sm);padding:0.75rem 1rem;margin-bottom:1rem;font-size:0.85rem;">
+                <div style="font-weight:700;color:var(--accent)" id="info-mesa">🍽️ Mesa —</div>
+                <div style="color:var(--text-secondary)" id="info-nombre"></div>
+            </div>
+
+            <div class="carrito-items" id="carrito-items">
+                <div class="carrito-vacio">
+                    <div style="font-size:2rem;margin-bottom:0.5rem">🛒</div>
+                    Tu carrito está vacío.<br>¡Agregá algo rico!
+                </div>
+            </div>
+
+            <div class="carrito-total">
+                <div class="carrito-total-row"><span>Subtotal</span><span id="subtotal">$0</span></div>
+                <div class="carrito-total-final"><span>Total</span><span id="total">$0</span></div>
+                <button class="btn btn-primary w-full" onclick="confirmarPedido()" id="btn-confirmar">
+                    Confirmar pedido
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sección mis pedidos de la mesa -->
+    <div class="mis-pedidos-mesa" id="mis-pedidos-mesa">
+        <h3 style="margin-bottom:1rem;font-size:1.1rem;border-bottom:2px solid var(--accent);padding-bottom:0.5rem;display:inline-block">📋 Pedidos de la mesa</h3>
+        <div id="lista-pedidos-mesa"></div>
+    </div>
+
+<script>
+    const params = new URLSearchParams(window.location.search);
+    const numeroMesa = params.get('mesa') || '?';
+    const nombreCliente = params.get('nombre') || 'Cliente';
+
+    document.getElementById('info-mesa').textContent = '🍽️ Mesa ' + numeroMesa;
+    document.getElementById('info-nombre').textContent = '👤 ' + nombreCliente;
+    document.getElementById('saludo').textContent = 'Mesa ' + numeroMesa + ' · ' + nombreCliente;
+
+    let carrito = [];
+    let todosLosProductos = [];
+    let pedidosMesa = []; // lista de ids de pedidos de esta sesión
+    let refreshInterval = null;
+
+    const ordenEstados = ['pendiente', 'en_preparacion', 'listo', 'entregado'];
+    const labelEstados = {
+        pendiente: '⏳ Recibido',
+        en_preparacion: '👨‍🍳 Preparando',
+        listo: '🔔 Listo',
+        entregado: '✅ Entregado'
+    };
+
+    async function cargarCategorias() {
+        try {
+            const res = await fetch('/api/admin/categorias');
+            const cats = await res.json();
+            const bar = document.getElementById('categorias-bar');
+            cats.forEach(c => {
+                const btn = document.createElement('button');
+                btn.className = 'categoria-btn';
+                btn.textContent = (c.emoji || '') + ' ' + c.nombre;
+                btn.onclick = () => filtrarCategoria(c.nombre, btn);
+                bar.appendChild(btn);
+            });
+        } catch (err) { console.error(err); }
+    }
+
+    async function cargarProductos() {
+        const grid = document.getElementById('productos-grid');
+        try {
+            const res = await fetch('/api/productos/publico');
+            todosLosProductos = await res.json();
+            renderProductos(todosLosProductos);
+        } catch (err) {
+            grid.innerHTML = '<p class="text-muted">Error al cargar productos.</p>';
+        }
+    }
+
+    function renderProductos(lista) {
+        const grid = document.getElementById('productos-grid');
+        if (!lista.length) { grid.innerHTML = '<p class="text-muted">No hay productos en esta categoría.</p>'; return; }
+        grid.innerHTML = lista.map(p =>
+            '<div class="producto-card">' +
+            '<div class="producto-emoji">' + (p.emoji || '🍽️') + '</div>' +
+            '<div class="producto-info">' +
+            '<div class="producto-nombre">' + p.nombre + '</div>' +
+            '<div class="producto-desc">' + (p.descripcion || '') + '</div>' +
+            '<div class="producto-footer">' +
+            '<div><div class="producto-precio">$' + Number(p.precio).toLocaleString('es-AR') + '</div></div>' +
+            '<button class="btn-agregar" onclick="agregarAlCarrito(' + p.id + ',\'' + p.nombre.replace(/'/g, "\\'") + '\',' + p.precio + ',\'' + (p.emoji || '🍽️') + '\')"' +
+            (p.stock === 0 ? ' disabled style="opacity:0.4;cursor:not-allowed"' : '') + '>+</button>' +
+            '</div></div></div>'
+        ).join('');
+    }
+
+    function filtrarCategoria(categoria, btn) {
+        document.querySelectorAll('.categoria-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById('titulo-seccion').textContent = categoria || 'Todo el menú';
+        renderProductos(categoria ? todosLosProductos.filter(p => p.categoria === categoria) : todosLosProductos);
+    }
+
+    function agregarAlCarrito(id, nombre, precio, emoji) {
+        const ex = carrito.find(i => i.id === id);
+        if (ex) ex.cantidad++;
+        else carrito.push({ id, nombre, precio: Number(precio), emoji, cantidad: 1 });
+        renderCarrito();
+    }
+
+    function cambiarCantidad(id, delta) {
+        const item = carrito.find(i => i.id === id);
+        if (!item) return;
+        item.cantidad += delta;
+        if (item.cantidad <= 0) carrito = carrito.filter(i => i.id !== id);
+        renderCarrito();
+    }
+
+    function renderCarrito() {
+        const container = document.getElementById('carrito-items');
+        const total = carrito.reduce((s, i) => s + i.precio * i.cantidad, 0);
+        document.getElementById('carrito-count').textContent = carrito.reduce((s, i) => s + i.cantidad, 0);
+        document.getElementById('subtotal').textContent = '$' + total.toLocaleString('es-AR');
+        document.getElementById('total').textContent = '$' + total.toLocaleString('es-AR');
+        if (!carrito.length) {
+            container.innerHTML = '<div class="carrito-vacio"><div style="font-size:2rem;margin-bottom:0.5rem">🛒</div>Tu carrito está vacío.<br>¡Agregá algo rico!</div>';
+            return;
+        }
+        container.innerHTML = carrito.map(item =>
+            '<div class="carrito-item">' +
+            '<div class="carrito-item-emoji">' + item.emoji + '</div>' +
+            '<div class="carrito-item-info"><div class="carrito-item-nombre">' + item.nombre + '</div>' +
+            '<div class="carrito-item-precio">$' + (item.precio * item.cantidad).toLocaleString('es-AR') + '</div></div>' +
+            '<div class="carrito-item-controls">' +
+            '<button class="qty-btn" onclick="cambiarCantidad(' + item.id + ',-1)">−</button>' +
+            '<span class="qty-num">' + item.cantidad + '</span>' +
+            '<button class="qty-btn" onclick="cambiarCantidad(' + item.id + ',1)">+</button>' +
+            '</div></div>'
+        ).join('');
+    }
+
+    async function confirmarPedido() {
+        if (!carrito.length) { alert('Agregá productos al carrito primero.'); return; }
+        const btn = document.getElementById('btn-confirmar');
+        btn.disabled = true; btn.textContent = 'Procesando...';
+
+        try {
+            const items = carrito.map(i => ({ id_producto: i.id, cantidad: i.cantidad }));
+            const res = await fetch('/api/pedidos/mesa', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ numero_mesa: parseInt(numeroMesa), nombre_cliente: nombreCliente, items })
+            });
+            const data = await res.json();
+            if (!res.ok) { alert(data.error || 'Error al crear el pedido.'); btn.disabled = false; btn.textContent = 'Confirmar pedido'; return; }
+
+            // Agregar pedido a la lista local con el detalle
+            pedidosMesa.push({
+                id: data.id_pedido,
+                total: data.total,
+                estado: 'pendiente',
+                detalle: carrito.map(i => ({ producto: i.nombre, cantidad: i.cantidad, precio_unitario: i.precio }))
+            });
+
+            carrito = [];
+            renderCarrito();
+            btn.disabled = false;
+            btn.textContent = 'Confirmar pedido';
+
+            // Mostrar sección de pedidos
+            document.getElementById('mis-pedidos-mesa').classList.add('visible');
+            renderPedidosMesa();
+
+            // Iniciar o mantener el refresh
+            if (!refreshInterval) {
+                refreshInterval = setInterval(actualizarEstados, 10000);
+            }
+
+        } catch (err) {
+            alert('Error de conexión.');
+            btn.disabled = false; btn.textContent = 'Confirmar pedido';
+        }
+    }
+
+    async function actualizarEstados() {
+        for (let p of pedidosMesa) {
+            if (p.estado === 'entregado' || p.estado === 'cancelado') continue;
+            try {
+                const res = await fetch('/api/pedidos/estado/' + p.id);
+                const data = await res.json();
+                if (data.estado) p.estado = data.estado;
+            } catch (err) { console.error(err); }
+        }
+        renderPedidosMesa();
+
+        // Si todos están entregados o cancelados, parar el refresh
+        const todosFinalizados = pedidosMesa.every(p => p.estado === 'entregado' || p.estado === 'cancelado');
+        if (todosFinalizados) { clearInterval(refreshInterval); refreshInterval = null; }
+    }
+
+    function renderPedidosMesa() {
+        const lista = document.getElementById('lista-pedidos-mesa');
+        lista.innerHTML = pedidosMesa.map(p => {
+            const idxActual = ordenEstados.indexOf(p.estado);
+            const stepsHTML = ordenEstados.map((estado, idx) => {
+                let cls = '';
+                if (idx < idxActual) cls = 'completado';
+                else if (idx === idxActual) cls = 'activo';
+                return '<div class="estado-step ' + cls + '">' + labelEstados[estado] + '</div>';
+            }).join('');
+
+            const detalleHTML = p.detalle.map(d =>
+                '<div class="detalle-item"><span>' + d.producto + ' × ' + d.cantidad + '</span><span>$' + (d.precio_unitario * d.cantidad).toLocaleString('es-AR') + '</span></div>'
+            ).join('');
+
+            return '<div class="pedido-mesa-card">' +
+                '<div class="pedido-mesa-header">' +
+                '<span class="pedido-mesa-id">Pedido #' + p.id + '</span>' +
+                '<span class="pedido-mesa-total">$' + Number(p.total).toLocaleString('es-AR') + '</span>' +
+                '</div>' +
+                '<div class="estado-steps">' + stepsHTML + '</div>' +
+                '<div class="detalle-items">' + detalleHTML + '</div>' +
+                '</div>';
+        }).join('');
+    }
+
+    cargarCategorias();
+    cargarProductos();
+</script>
+</body>
+</html>

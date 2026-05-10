@@ -32,6 +32,20 @@ router.post('/mesa', async (req, res) => {
     }
 });
 
+// Ruta pública — consultar estado de pedido de mesa (sin JWT)
+router.get('/estado/:id', async (req, res) => {
+    try {
+        const result = await pool.query(
+            'SELECT estado FROM pedidos WHERE id = $1',
+            [req.params.id]
+        );
+        if (!result.rows.length) return res.status(404).json({ error: 'Pedido no encontrado.' });
+        res.json({ estado: result.rows[0].estado });
+    } catch (err) {
+        res.status(500).json({ error: 'Error al consultar estado.' });
+    }
+});
+
 router.get('/',                       verificarToken, getPedidos);
 router.get('/:id',                    verificarToken, getPedidoById);
 router.post('/',                      verificarToken, createPedido);

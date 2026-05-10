@@ -310,7 +310,7 @@ async function cargarDashboard() {
 async function cargarPedidos() {
     allPedidos = await API('/pedidos');
     renderPedidos();
-    setInterval(async () => { allPedidos = await API('/pedidos'); renderPedidos(); }, 15000);
+    setInterval(async () => { allPedidos = await API('/pedidos'); renderPedidos(); }, 10000);
 }
 
 function renderPedidos() {
@@ -549,7 +549,8 @@ function renderUsuarios() {
 
 document.querySelectorAll('.modal-overlay').forEach(o => o.addEventListener('click', e => { if (e.target===o) o.classList.remove('show'); }));
 
-cargarDashboard();
+cargarDashboard()
+setInterval(cargarDashboard, 10000);
 </script>
 </body>
 </html>
