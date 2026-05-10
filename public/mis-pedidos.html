@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>El Patio – Mis Pedidos</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .codigo-box {
+            background: var(--bg-card);
+            border: 2px solid var(--accent);
+            border-radius: var(--radius);
+            padding: 1rem;
+            text-align: center;
+            margin-top: 0.75rem;
+        }
+        .codigo-label { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 0.3rem; }
+        .codigo-num { font-size: 2.2rem; font-weight: 900; color: var(--accent); letter-spacing: 0.3em; }
+        .codigo-hint { font-size: 0.78rem; color: var(--text-secondary); margin-top: 0.3rem; }
+    </style>
+</head>
+<body>
+
+    <nav class="navbar">
+        <a class="navbar-brand" href="menu.html"><img src="logo.png" alt="El Patio"><span>El Patio Comidas</span></a>
+        <div class="navbar-actions">
+            <span class="navbar-user" id="saludo"></span>
+            <a href="menu.html" class="btn btn-secondary btn-sm">🍽️ Menú</a>
+            <button class="btn btn-secondary btn-sm" onclick="logout()">Salir</button>
+        </div>
+    </nav>
+
+    <div class="pedidos-container">
+        <h2 style="margin-bottom:1.5rem">📦 Mis pedidos</h2>
+        <div id="pedidos-lista">
+            <div class="loading"><div class="spinner"></div>Cargando pedidos...</div>
+        </div>
+    </div>
+
+<script>
+    const token = localStorage.getItem('token');
+    const usuario = JSON.parse(localStorage.getItem('usuario') || 'null');
+    if (!token || !usuario) window.location.href = 'index.html';
+
+    document.getElementById('saludo').textContent = 'Hola, ' + (usuario?.nombre || '') + ' 👋';
+
+    const headers = { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token };
+
+    const estadoTexto = {
+        pendiente:       '⏳ Pendiente',
+        en_preparacion:  '👨‍🍳 En preparación',
+        listo:           '✅ Listo para retirar',
+        en_camino:       '🛵 En camino',
+        entregado:       '✅ Entregado',
+        cancelado:       '❌ Cancelado'
+    };
+
+    async function cargarPedidos() {
+        const lista = document.getElementById('pedidos-lista');
+        try {
+            const res = await fetch('/api/pedidos', { headers });
+            const pedidos = await res.json();
+
+            if (!pedidos.length) {
+                lista.innerHTML =
+                    '<div class="loading">' +
+                    '<div style="font-size:3rem;margin-bottom:1rem">📭</div>' +
+                    'Todavía no hiciste ningún pedido.<br>' +
+                    '<a href="menu.html" class="btn btn-primary" style="margin-top:1rem">Ver menú</a>' +
+                    '</div>';
+                return;
+            }
+
+            lista.innerHTML = pedidos.map(p => {
+                // Mostrar código solo si está en camino y es delivery
+                const codigoHTML = (p.estado === 'en_camino' && p.tipo_pedido === 'delivery' && p.codigo_entrega)
+                    ? '<div class="codigo-box">' +
+                      '<div class="codigo-label">Código de entrega</div>' +
+                      '<div class="codigo-num">' + p.codigo_entrega + '</div>' +
+                      '<div class="codigo-hint">Dáselo al repartidor cuando llegue</div>' +
+                      '</div>'
+                    : '';
+
+                const ubicacion = p.tipo_pedido === 'mesa'
+                    ? '🍽️ Mesa ' + p.numero_mesa + (p.nombre_cliente ? ' · ' + p.nombre_cliente : '')
+                    : '📍 ' + (p.direccion_entrega || '');
+
+                return '<div class="pedido-card">' +
+                    '<div class="pedido-header">' +
+                    '<div>' +
+                    '<div class="pedido-id">Pedido #' + p.id + '</div>' +
+                    '<div class="pedido-fecha">' + new Date(p.fecha_pedido).toLocaleString('es-AR') + '</div>' +
+                    '</div>' +
+                    '<span class="estado-badge estado-' + p.estado + '">' + (estadoTexto[p.estado] || p.estado) + '</span>' +
+                    '</div>' +
+                    '<div style="color:var(--text-secondary);font-size:0.85rem">' + ubicacion + '</div>' +
+                    '<div class="pedido-total">$' + Number(p.total).toLocaleString('es-AR') + '</div>' +
+                    codigoHTML +
+                    '</div>';
+            }).join('');
+
+        } catch (err) {
+            lista.innerHTML = '<p class="text-muted">Error al cargar pedidos.</p>';
+        }
+    }
+
+    function logout() { localStorage.clear(); window.location.href = 'index.html'; }
+
+    cargarPedidos();
+    setInterval(cargarPedidos, 10000);
+</script>
+</body>
+</html>

@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>El Patio – Registro</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="auth-container">
+        <div class="auth-box">
+            <div class="auth-logo"><img src="logo.png" alt="El Patio"> El Patio Comidas</div>
+            <p class="auth-subtitle">Creá tu cuenta en El Patio Comidas</p>
+
+            <div class="alert alert-error" id="alerta-error"></div>
+            <div class="alert alert-success" id="alerta-ok"></div>
+
+            <div class="form-group">
+                <label>Nombre completo</label>
+                <input type="text" id="nombre" placeholder="Juan García">
+            </div>
+            <div class="form-group">
+                <label>Email</label>
+                <input type="email" id="email" placeholder="tu@email.com">
+            </div>
+            <div class="form-group">
+                <label>Contraseña</label>
+                <input type="password" id="password" placeholder="Mínimo 6 caracteres">
+            </div>
+            <div class="form-group">
+                <label>Confirmar contraseña</label>
+                <input type="password" id="confirmar" placeholder="Repetí tu contraseña">
+            </div>
+
+            <button class="btn btn-primary w-full" onclick="registrar()">Crear cuenta</button>
+
+            <div class="form-footer">
+                ¿Ya tenés cuenta? <a href="index.html">Iniciá sesión</a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function registrar() {
+            const nombre = document.getElementById('nombre').value.trim();
+            const email = document.getElementById('email').value.trim();
+            const password = document.getElementById('password').value;
+            const confirmar = document.getElementById('confirmar').value;
+            const error = document.getElementById('alerta-error');
+            const ok = document.getElementById('alerta-ok');
+
+            error.classList.remove('show');
+            ok.classList.remove('show');
+
+            if (!nombre || !email || !password || !confirmar) {
+                error.textContent = 'Completá todos los campos.';
+                error.classList.add('show');
+                return;
+            }
+
+            if (password !== confirmar) {
+                error.textContent = 'Las contraseñas no coinciden.';
+                error.classList.add('show');
+                return;
+            }
+
+            if (password.length < 6) {
+                error.textContent = 'La contraseña debe tener al menos 6 caracteres.';
+                error.classList.add('show');
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/auth/register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ nombre, email, password })
+                });
+                const data = await res.json();
+
+                if (!res.ok) {
+                    error.textContent = data.error || 'Error al registrarse.';
+                    error.classList.add('show');
+                    return;
+                }
+
+                localStorage.setItem('token', data.token);
+                localStorage.setItem('usuario', JSON.stringify(data.usuario));
+
+                ok.textContent = '¡Cuenta creada! Redirigiendo...';
+                ok.classList.add('show');
+
+                setTimeout(() => {
+                    window.location.href = 'menu.html';
+                }, 1000);
+
+            } catch (err) {
+                error.textContent = 'Error de conexión con el servidor.';
+                error.classList.add('show');
+            }
+        }
+
+        document.addEventListener('keypress', e => {
+            if (e.key === 'Enter') registrar();
+        });
+    </script>
+</body>
+</html>

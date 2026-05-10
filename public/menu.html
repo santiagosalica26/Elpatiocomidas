@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>El Patio – Menú</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <!-- NAVBAR -->
+    <nav class="navbar">
+        <a class="navbar-brand" href="menu.html"><img src="logo.png" alt="El Patio"><span>El Patio Comidas</span></a>
+        <div class="navbar-actions">
+            <span class="navbar-user" id="saludo"></span>
+            <a href="mis-pedidos.html" class="btn btn-secondary btn-sm">📦 Mis pedidos</a>
+            <button class="btn btn-secondary btn-sm" onclick="logout()">Salir</button>
+        </div>
+    </nav>
+
+    <!-- FILTROS POR CATEGORÍA -->
+    <div class="categorias-bar" id="categorias-bar">
+        <button class="categoria-btn active" onclick="filtrarCategoria(null, this)">🍽️ Todos</button>
+    </div>
+
+    <!-- LAYOUT PRINCIPAL -->
+    <div class="main-layout">
+
+        <!-- PRODUCTOS -->
+        <div>
+            <p class="section-title" id="titulo-seccion">Todo el menú</p>
+            <div class="productos-grid" id="productos-grid">
+                <div class="loading">
+                    <div class="spinner"></div>
+                    Cargando menú...
+                </div>
+            </div>
+        </div>
+
+        <!-- CARRITO -->
+        <div class="carrito-panel">
+            <div class="carrito-titulo">
+                🛒 Tu pedido
+                <span class="carrito-badge" id="carrito-count">0</span>
+            </div>
+
+            <div class="carrito-items" id="carrito-items">
+                <div class="carrito-vacio">
+                    <div style="font-size:2rem;margin-bottom:0.5rem">🛒</div>
+                    Tu carrito está vacío.<br>¡Agregá algo rico!
+                </div>
+            </div>
+
+            <div class="carrito-total">
+                <div class="carrito-total-row">
+                    <span>Subtotal</span>
+                    <span id="subtotal">$0</span>
+                </div>
+                <div class="carrito-total-row">
+                    <span>Envío</span>
+                    <span>Gratis 🎉</span>
+                </div>
+                <div class="carrito-total-final">
+                    <span>Total</span>
+                    <span id="total">$0</span>
+                </div>
+                <input class="direccion-input" id="direccion" placeholder="📍 Tu dirección de entrega">
+                <button class="btn btn-primary w-full" onclick="confirmarPedido()" id="btn-confirmar">
+                    Confirmar pedido
+                </button>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // ── Auth guard ─────────────────────────────────────────
+        const token = localStorage.getItem('token');
+        const usuario = JSON.parse(localStorage.getItem('usuario') || 'null');
+        if (!token || !usuario) window.location.href = 'index.html';
+        if (usuario?.rol === 'admin') window.location.href = 'admin.html';
+
+        document.getElementById('saludo').textContent = `Hola, ${usuario?.nombre} 👋`;
+
+        // ── Estado del carrito ─────────────────────────────────
+        let carrito = []; // [{ id, nombre, precio, emoji, cantidad }]
+        let todosLosProductos = [];
+
+        // ── Headers con JWT ────────────────────────────────────
+        const headers = {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+        };
+
+        // ── Cargar categorías ──────────────────────────────────
+        async function cargarCategorias() {
+            try {
+                const res = await fetch('/api/admin/categorias', { headers });
+                const cats = await res.json();
+                const bar = document.getElementById('categorias-bar');
+                cats.forEach(c => {
+                    const btn = document.createElement('button');
+                    btn.className = 'categoria-btn';
+                    btn.textContent = `${c.emoji || ''} ${c.nombre}`;
+                    btn.onclick = () => filtrarCategoria(c.nombre, btn);
+                    bar.appendChild(btn);
+                });
+            } catch (err) { console.error(err); }
+        }
+
+        // ── Cargar productos ───────────────────────────────────
+        async function cargarProductos() {
+            const grid = document.getElementById('productos-grid');
+            try {
+                const res = await fetch('/api/productos', { headers });
+                if (res.status === 401 || res.status === 403) {
+                    window.location.href = 'index.html';
+                    return;
+                }
+                todosLosProductos = await res.json();
+                renderProductos(todosLosProductos);
+            } catch (err) {
+                grid.innerHTML = '<p class="text-muted">Error al cargar productos.</p>';
+            }
+        }
+
+        // ── Renderizar cards de productos ──────────────────────
+        function renderProductos(lista) {
+            const grid = document.getElementById('productos-grid');
+
+            if (lista.length === 0) {
+                grid.innerHTML = '<p class="text-muted">No hay productos en esta categoría.</p>';
+                return;
+            }
+
+            grid.innerHTML = lista.map(p => `
+                <div class="producto-card">
+                    <div class="producto-emoji">${p.emoji || '🍽️'}</div>
+                    <div class="producto-info">
+                        <div class="producto-nombre">${p.nombre}</div>
+                        <div class="producto-desc">${p.descripcion || ''}</div>
+                        <div class="producto-footer">
+                            <div>
+                                <div class="producto-precio">$${Number(p.precio).toLocaleString('es-AR')}</div>
+                                <div class="producto-stock">${p.stock > 0 ? `Stock: ${p.stock}` : '⚠️ Sin stock'}</div>
+                            </div>
+                            <button class="btn-agregar" 
+                                onclick="agregarAlCarrito(${p.id}, '${p.nombre.replace(/'/g, "\\'")}', ${p.precio}, '${p.emoji || '🍽️'}')"
+                                ${p.stock === 0 ? 'disabled style="opacity:0.4;cursor:not-allowed"' : ''}>
+                                +
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // ── Filtrar por categoría ──────────────────────────────
+        function filtrarCategoria(categoria, btn) {
+            document.querySelectorAll('.categoria-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+
+            const titulo = document.getElementById('titulo-seccion');
+            if (!categoria) {
+                titulo.textContent = 'Todo el menú';
+                renderProductos(todosLosProductos);
+            } else {
+                titulo.textContent = categoria;
+                renderProductos(todosLosProductos.filter(p => p.categoria === categoria));
+            }
+        }
+
+        // ── Agregar al carrito ─────────────────────────────────
+        function agregarAlCarrito(id, nombre, precio, emoji) {
+            const existente = carrito.find(i => i.id === id);
+            if (existente) {
+                existente.cantidad++;
+            } else {
+                carrito.push({ id, nombre, precio: Number(precio), emoji, cantidad: 1 });
+            }
+            renderCarrito();
+        }
+
+        // ── Cambiar cantidad ───────────────────────────────────
+        function cambiarCantidad(id, delta) {
+            const item = carrito.find(i => i.id === id);
+            if (!item) return;
+            item.cantidad += delta;
+            if (item.cantidad <= 0) carrito = carrito.filter(i => i.id !== id);
+            renderCarrito();
+        }
+
+        // ── Renderizar carrito ─────────────────────────────────
+        function renderCarrito() {
+            const container = document.getElementById('carrito-items');
+            const badge = document.getElementById('carrito-count');
+            const totalItems = carrito.reduce((s, i) => s + i.cantidad, 0);
+            const total = carrito.reduce((s, i) => s + i.precio * i.cantidad, 0);
+
+            badge.textContent = totalItems;
+            document.getElementById('subtotal').textContent = `$${total.toLocaleString('es-AR')}`;
+            document.getElementById('total').textContent = `$${total.toLocaleString('es-AR')}`;
+
+            if (carrito.length === 0) {
+                container.innerHTML = `
+                    <div class="carrito-vacio">
+                        <div style="font-size:2rem;margin-bottom:0.5rem">🛒</div>
+                        Tu carrito está vacío.<br>¡Agregá algo rico!
+                    </div>`;
+                return;
+            }
+
+            container.innerHTML = carrito.map(item => `
+                <div class="carrito-item">
+                    <div class="carrito-item-emoji">${item.emoji}</div>
+                    <div class="carrito-item-info">
+                        <div class="carrito-item-nombre">${item.nombre}</div>
+                        <div class="carrito-item-precio">$${(item.precio * item.cantidad).toLocaleString('es-AR')}</div>
+                    </div>
+                    <div class="carrito-item-controls">
+                        <button class="qty-btn" onclick="cambiarCantidad(${item.id}, -1)">−</button>
+                        <span class="qty-num">${item.cantidad}</span>
+                        <button class="qty-btn" onclick="cambiarCantidad(${item.id}, 1)">+</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // ── Confirmar pedido ───────────────────────────────────
+        async function confirmarPedido() {
+            const direccion = document.getElementById('direccion').value.trim();
+
+            if (carrito.length === 0) {
+                alert('Agregá productos al carrito primero.');
+                return;
+            }
+            if (!direccion) {
+                alert('Ingresá tu dirección de entrega.');
+                document.getElementById('direccion').focus();
+                return;
+            }
+
+            const btn = document.getElementById('btn-confirmar');
+            btn.disabled = true;
+            btn.textContent = 'Procesando...';
+
+            try {
+                const items = carrito.map(i => ({ id_producto: i.id, cantidad: i.cantidad }));
+                const res = await fetch('/api/pedidos', {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify({ direccion_entrega: direccion, items })
+                });
+                const data = await res.json();
+
+                if (!res.ok) {
+                    alert(data.error || 'Error al crear el pedido.');
+                    btn.disabled = false;
+                    btn.textContent = 'Confirmar pedido';
+                    return;
+                }
+
+                carrito = [];
+                renderCarrito();
+                alert(`✅ ¡Pedido #${data.id_pedido} confirmado! Total: $${Number(data.total).toLocaleString('es-AR')}`);
+                window.location.href = 'mis-pedidos.html';
+
+            } catch (err) {
+                alert('Error de conexión.');
+                btn.disabled = false;
+                btn.textContent = 'Confirmar pedido';
+            }
+        }
+
+        // ── Logout ─────────────────────────────────────────────
+        function logout() {
+            localStorage.removeItem('token');
+            localStorage.removeItem('usuario');
+            window.location.href = 'index.html';
+        }
+
+        // ── Iniciar ────────────────────────────────────────────
+        cargarCategorias();
+        cargarProductos();
+    </script>
+</body>
+</html>
